@@ -74,7 +74,7 @@ final class PhotosTour: XCTestCase {
     // MARK: steps
 
     func stepLibrary() {
-        tap(["Library"])
+        tap(["Library", "All Photos"])
         tap(["All Photos"])
         capture("01-allphotos-default")
         if openMore() {
@@ -130,7 +130,7 @@ final class PhotosTour: XCTestCase {
     }
 
     func stepDaysMonthsYears() {
-        tap(["Library"])
+        tap(["Library", "All Photos"])
         for (number, view) in [(11, "Days"), (12, "Months"), (13, "Years")] {
             guard tap([view]) else { continue }
             capture("\(number)-\(view.lowercased())")
@@ -157,41 +157,46 @@ final class PhotosTour: XCTestCase {
     }
 
     func stepViewer() {
-        tap(["Library"])
+        tap(["Library", "All Photos"])
         tap(["All Photos"])
         guard openSomePhoto() else { return }
         capture("20-viewer")
         center().tap()
         capture("21-viewer-chrome-hidden")
         center().tap()
-        photos.swipeUp()
-        capture("22-viewer-info-swiped")
-        photos.swipeDown()
-        if tap(["Info", "Show Info", "info"]) {
-            capture("23-viewer-info-button")
-            photos.swipeDown()
+        // Run 2 (18 October 2026): a swipe down closes the whole viewer, so the info panel is opened and closed
+        // with its own button ("info", identifier com.apple.mobileslideshow.infoButton), never by swiping down.
+        let info = ["info", "com.apple.mobileslideshow.infoButton", "Info", "Show Info"]
+        if tap(info) {
+            pause(1.5)
+            capture("22-viewer-info-panel")
+            photos.swipeUp()
+            capture("23-viewer-info-panel-full")
+            tap(info, timeout: 2)
         }
-        // Favourite three photos, so the Favorites album has something in it.
+        // Favourite three photos, so the Favorites album has something in it (the heart is a switch).
         for n in 1...3 {
             if tap(["Favorite", "Favourite", "Add to Favorites"]) && n == 1 { capture("24-viewer-favourited") }
             photos.swipeLeft()
+            pause(0.8)
         }
         capture("25-viewer-after-swipes")
+        if tap(["Actions", "More"], timeout: 2) {
+            capture("25b-viewer-actions-menu")
+            dismissMenu()
+        }
         if tap(["Share"]) {
             pause(2)
             capture("26-share-sheet")
             // Swipe the sheet away only when it has no Close button: with no sheet up, a swipe down closes the viewer.
             if !tap(["Close", "Cancel"], timeout: 2) { photos.swipeDown() }
         }
-        center().press(forDuration: 1.2)
-        capture("27-viewer-long-press")
-        dismissMenu()
         closeViewer()
         capture("28-back-in-grid")
     }
 
     func stepContextMenus() {
-        tap(["Library"])
+        tap(["Library", "All Photos"])
         tap(["All Photos"])
         if let cell = visibleCells().dropLast(3).last {
             cell.press(forDuration: 1.2)
@@ -268,7 +273,7 @@ final class PhotosTour: XCTestCase {
     }
 
     func stepDelete() {
-        tap(["Library"])
+        tap(["Library", "All Photos"])
         tap(["All Photos"])
         guard openSomePhoto() else { return }
         if tap(["Delete", "Trash"]) {
@@ -328,13 +333,15 @@ final class PhotosTour: XCTestCase {
     func tap(_ labels: [String], timeout: Double = 4) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
+            ensureRunning()
             let onScreen = screenLabels()
             for label in labels {
                 if let onScreen = onScreen, !onScreen.contains(where: { $0.localizedCaseInsensitiveContains(label) }) {
                     continue
                 }
                 let exact = NSPredicate(format: "label == %@ OR identifier == %@", label, label)
-                let queries = [photos.tabBars.buttons, photos.buttons, photos.segmentedControls.buttons,
+                // Switches too: the viewer's Favourite heart is a switch (run 2, 18 October 2026).
+                let queries = [photos.tabBars.buttons, photos.buttons, photos.switches, photos.segmentedControls.buttons,
                                photos.menuItems, photos.cells, photos.staticTexts, photos.otherElements]
                 for query in queries {
                     if let element = firstHittable(query.matching(exact)) {
@@ -451,6 +458,7 @@ final class PhotosTour: XCTestCase {
     /// finds either kind, and is far faster than asking every cell whether it is hittable. Items whose centre
     /// is under the top or bottom bars are left out. The log says which kind was used.
     func visibleCells() -> [XCUICoordinate] {
+        ensureRunning()
         let deadline = Date().addingTimeInterval(3)
         repeat {
             if let root = try? photos.snapshot() {
@@ -506,7 +514,18 @@ final class PhotosTour: XCTestCase {
 
     // MARK: capture
 
+    /// Photos sometimes quits under the tour on the simulator (run 2, 18 October 2026, after the viewer's long-press
+    /// menu); a query against a stopped app ends the whole test, so every action checks first.
+    func ensureRunning() {
+        if photos.state != .runningForeground {
+            note("Photos not in front (state \(photos.state.rawValue)); activating it")
+            photos.activate()
+            pause(2)
+        }
+    }
+
     func capture(_ name: String) {
+        ensureRunning()
         pause(1.0)
         // Names joined as strings: URL.appendingPathExtension may refuse a two-part extension such as "tree.txt"
         // and hand back the bare URL, and then the PNG, tree and JSON would overwrite one another.
