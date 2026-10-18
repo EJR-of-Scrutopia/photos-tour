@@ -2,3 +2,5 @@
 seed/
 *.xcresult
 PhotosTour.xcodeproj/
+mac/MacPhotosTour.xcodeproj/
+mac/derived/

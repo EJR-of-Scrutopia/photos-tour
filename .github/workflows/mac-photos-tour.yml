@@ -1,0 +1,45 @@
+name: Mac Photos tour
+
+# Walks Apple's Photos app on the macOS 14 runner's desktop and uploads screenshots plus every element's frame in points.
+# The runner image carries Xcode 15.4. Photos is the runner's own copy, imported with generated test photos.
+on:
+  workflow_dispatch:
+    inputs:
+      steps_light:
+        description: "Steps in light mode: all, or a comma list (library,sidebar,viewer,select,albums,search,delete,deleted,settings)"
+        default: "all"
+      steps_dark:
+        description: "Steps in dark mode, or none"
+        default: "library,sidebar,viewer,albums,search,deleted"
+      xcode:
+        description: "Xcode version on the runner"
+        default: "15.4"
+
+jobs:
+  tour:
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${{ inputs.xcode }}.app"
+          xcodebuild -version
+
+      - name: Run the Mac tour
+        env:
+          STEPS_LIGHT: ${{ inputs.steps_light }}
+          STEPS_DARK: ${{ inputs.steps_dark }}
+        run: |
+          chmod +x mac/mac-tour.sh
+          ./mac/mac-tour.sh
+
+      - name: Upload screenshots, element frames and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-photos-tour-out
+          path: ~/mac-photos-tour-out
+          if-no-files-found: warn
+          retention-days: 14
