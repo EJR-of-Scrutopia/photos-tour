@@ -67,6 +67,7 @@ final class PhotosTour: XCTestCase {
         step("albums") { stepAlbums() }
         step("search") { stepSearch() }
         step("delete") { stepDelete() }
+        step("unlock") { stepUnlockSetting() }
         step("deleted") { stepRecentlyDeleted() }
         note("== tour finished")
     }
@@ -301,6 +302,10 @@ final class PhotosTour: XCTestCase {
             note("tapping the Recently Deleted text at y \(Int(row.frame.midY))")
             row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             pause(1.5)
+            // Run 5: the right row was tapped and Photos stayed on Albums; a system unlock prompt is the suspect.
+            captureScreen("71x-after-tap-\(attempt)", of: photos)
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            if springboard.alerts.count > 0 { note("system alert: '\(springboard.alerts.firstMatch.label)'") }
             let title = photos.navigationBars.firstMatch.identifier
             note("opened '\(title)'")
             guard title.localizedCaseInsensitiveContains("Deleted") else { goBack(); continue }
@@ -315,6 +320,62 @@ final class PhotosTour: XCTestCase {
             return
         }
         note("NOT FOUND Recently Deleted after three attempts")
+    }
+
+    /// iOS 16 and later lock Hidden and Recently Deleted behind Face ID or the passcode (Settings > Photos). On the
+    /// throwaway simulator the tour turns that lock off, as an owner can, so the album opens (run 5, 18 October 2026).
+    func stepUnlockSetting() {
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        settings.launch()
+        pause(2)
+        var tries = 0
+        while !(settings.staticTexts["Photos"].exists && settings.staticTexts["Photos"].isHittable) && tries < 14 {
+            settings.swipeUp()
+            pause(0.6)
+            tries += 1
+        }
+        guard settings.staticTexts["Photos"].exists else {
+            note("NOT FOUND Settings > Photos")
+            settings.terminate()
+            photos.activate()
+            return
+        }
+        settings.staticTexts["Photos"].tap()
+        pause(1.5)
+        captureScreen("69-settings-photos", of: settings)
+        let lock = settings.switches.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@",
+                                                          "Face ID", "Passcode")).firstMatch
+        tries = 0
+        while !(lock.exists && lock.isHittable) && tries < 6 {
+            settings.swipeUp()
+            pause(0.6)
+            tries += 1
+        }
+        if lock.exists {
+            let value = "\(lock.value ?? "")"
+            note("lock switch '\(lock.label)' is \(value)")
+            if value == "1" {
+                lock.tap()
+                pause(1)
+                note("lock switched off")
+            }
+        } else {
+            note("NOT FOUND the Face ID / Passcode switch in Settings > Photos")
+        }
+        captureScreen("69b-settings-photos-lock", of: settings)
+        settings.terminate()
+        photos.activate()
+        pause(2)
+    }
+
+    /// A screenshot and element tree of any app, without bringing Photos back to the front first.
+    func captureScreen(_ name: String, of app: XCUIApplication) {
+        pause(1.0)
+        let shot = XCUIScreen.main.screenshot()
+        try? shot.pngRepresentation.write(to: outDir.appendingPathComponent(name + ".png"))
+        try? app.debugDescription.write(to: outDir.appendingPathComponent(name + ".tree.txt"), atomically: true,
+                                        encoding: .utf8)
+        note("captured \(name)")
     }
 
     /// Slow drags rather than swipes: a swipe left the Albums list moving (or not moving at all) in run 3.
