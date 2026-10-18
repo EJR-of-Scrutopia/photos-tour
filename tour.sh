@@ -130,6 +130,28 @@ say "XcodeGen $("$XCODEGEN" --version 2>&1 | tail -1)"
 (cd "$HERE" && "$XCODEGEN" generate) || { echo "XcodeGen failed"; exit 6; }
 
 mkdir -p "$OUT"
+
+# Where Photos keeps its album-lock setting: no documented key exists (October 2026), so record every name with
+# "ContentPrivacy" in it (the Settings switch is PhotosContentPrivacySwitch) and the Photos preferences around the
+# light pass, whose unlock step flips the switch.
+probe_defaults() {  # $1 label
+  xcrun simctl spawn "$UDID" defaults read com.apple.mobileslideshow > "$OUT/defaults-mobileslideshow-$1.txt" 2>&1
+  grep -ril "ContentPrivacy" "$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Library/Preferences" \
+    "$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Containers" > "$OUT/privacy-files-$1.txt" 2>/dev/null
+}
+ROOT="$(xcrun simctl list runtimes -j | python3 -c '
+import json, sys
+print(next((r.get("runtimeRoot", "") for r in json.load(sys.stdin)["runtimes"] if r["identifier"] == sys.argv[1]), ""))
+' "$RUNTIME")"
+{
+  echo "runtime root: $ROOT"
+  grep -r -a -o -h -E "[A-Za-z_.]*ContentPrivacy[A-Za-z_.]*" "$ROOT"/System/Library/PrivateFrameworks/*Photo* \
+    "$ROOT"/System/Library/Frameworks/Photos* "$ROOT"/System/Library/PreferenceBundles \
+    "$ROOT"/Applications/MobileSlideShow.app "$ROOT"/Applications/Preferences.app 2>/dev/null | sort | uniq -c | sort -rn | head -80
+} > "$OUT/lock-probe.txt"
+say "lock probe: $(wc -l < "$OUT/lock-probe.txt" | tr -d ' ') lines"
+probe_defaults before
+
 xcodebuild_test() {  # $1 light|dark, $2 steps, $3 log file, then extra build settings
   local appearance="$1" steps="$2" log="$3"
   shift 3
@@ -179,6 +201,7 @@ run_tour() {  # $1 light|dark, $2 steps ("none" skips the pass)
   fi
 }
 run_tour light "${STEPS_LIGHT:-all}"
+probe_defaults after-light
 run_tour dark "${STEPS_DARK:-library,views,viewer,foryou,albums,search}"
 xcrun simctl ui "$UDID" appearance light
 

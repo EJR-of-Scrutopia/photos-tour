@@ -371,12 +371,24 @@ final class PhotosTour: XCTestCase {
             if value == "1" {
                 lock.tap()
                 pause(1)
-                note("lock switched off")
+                note("lock switch tapped")
+                // Run 7 without Face ID: a "Confirm with Passcode" screen. With Face ID enrolled (run 9) a Face ID
+                // prompt is expected instead, which tour.sh answers with a match.
+                captureScreen("69b-settings-photos-lock", of: settings)
+                let passcode = settings.secureTextFields.firstMatch
+                if passcode.exists {
+                    note("passcode field shown; submitting it empty")
+                    passcode.tap()
+                    passcode.typeText("\n")
+                }
+                pause(3)
+                note("lock switch now \(lock.exists ? "\(lock.value ?? "")" : "gone")")
+                captureScreen("69c-settings-photos-after", of: settings)
             }
         } else {
             note("NOT FOUND the Face ID / Passcode switch in Settings > Photos")
+            captureScreen("69b-settings-photos-lock", of: settings)
         }
-        captureScreen("69b-settings-photos-lock", of: settings)
         settings.terminate()
         // Run 6: a Photos left running keeps its padlocks, and a locked album does nothing on a simulator with no
         // passcode or Face ID, so Photos is restarted to read the new setting.
