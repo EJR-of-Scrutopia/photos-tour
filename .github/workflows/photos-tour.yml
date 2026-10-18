@@ -10,7 +10,7 @@ on:
         default: "all"
       steps_dark:
         description: "Steps in dark mode, or none"
-        default: "library,views,viewer,foryou,albums,search"
+        default: "library,select,views,viewer,foryou,albums,search,delete,deleted"
       device:
         description: "Simulator device type"
         default: "iPhone-15-Pro"

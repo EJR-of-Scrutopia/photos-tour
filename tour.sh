@@ -5,7 +5,7 @@
 #   DEVICE_TYPE=iPhone-15-Pro-Max ./tour.sh
 #   IOS=16 ./tour.sh                   the same on an iOS 16 runtime (iPhone 14 Pro), if one can be installed
 #   SKIP_SEED=1 ./tour.sh              re-run without adding the test photos again
-#   STEPS_LIGHT=library,views ./tour.sh   only some steps (library views viewer context foryou albums search delete deleted)
+#   STEPS_LIGHT=library,views ./tour.sh   only some steps (library select views viewer context foryou albums search delete unlock deleted)
 #   STEPS_DARK=none ./tour.sh          skip the dark-mode pass
 #
 # Output: ~/photos-tour-out/<model>-iOS<version>-<light|dark>/ (screenshots, element trees, elements.json,

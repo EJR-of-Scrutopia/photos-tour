@@ -60,6 +60,7 @@ final class PhotosTour: XCTestCase {
         launchFresh()
         writeMeta()
         step("library") { stepLibrary() }
+        step("select") { stepSelect() }
         step("views") { stepDaysMonthsYears() }
         step("viewer") { stepViewer() }
         step("context") { stepContextMenus() }
@@ -121,13 +122,65 @@ final class PhotosTour: XCTestCase {
         photos.swipeDown()
         capture("08-allphotos-scrolled-back")
         for _ in 0..<4 { photos.swipeUp() }
+    }
 
-        if tap(["Select"]) {
-            capture("09-select-mode")
-            for cell in visibleCells().suffix(6).prefix(3) { cell.tap() }
-            capture("10-select-three")
-            tap(["Cancel"])
+    /// Select mode with photos ticked. Run 3's three quick taps selected nothing: the bottom rows sit under the
+    /// Select toolbar, and a first tap can be dead (run 11). So tap middle rows one at a time and re-tap any tap the
+    /// title did not count.
+    func stepSelect() {
+        tap(["Library", "All Photos"])
+        tap(["All Photos"])
+        pause(1.5)
+        guard tap(["Select"]) else { return }
+        pause(1.5)
+        capture("09-select-mode")
+        let cells = visibleCells()
+        guard cells.count >= 9 else { note("NOT FOUND enough photos to select (\(cells.count))"); return }
+        let start = cells.count / 3
+        for cell in cells[start..<(start + 3)] { selectTap(cell) }
+        capture("10-select-three")
+        if let more = toolbarButton(["More"]) {
+            more.tap()
+            pause(1)
+            capture("10b-select-more-menu")
+            dismissMenu()
         }
+        if let delete = toolbarButton(["Delete", "Trash"]) {
+            delete.tap()
+            pause(1)
+            capture("10c-select-delete-confirm")
+            tap(["Cancel"], timeout: 2)
+            pause(1)
+        }
+        tap(["Cancel"], timeout: 2)
+    }
+
+    /// The toolbar's title in Select mode: "Select Items", "1 Photo Selected", "3 Photos Selected".
+    func selectTitle() -> String {
+        let title = photos.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label == %@",
+                                                            "Selected", "Select Items")).firstMatch
+        return title.exists ? title.label : ""
+    }
+
+    /// One tick, checked: a tap the title did not count is tapped again (a second tap on a counted one would untick).
+    func selectTap(_ cell: XCUICoordinate) {
+        let before = selectTitle()
+        cell.tap()
+        pause(0.8)
+        if selectTitle() == before {
+            cell.tap()
+            pause(0.8)
+        }
+        note("select: '\(before)' -> '\(selectTitle())'")
+    }
+
+    func toolbarButton(_ labels: [String]) -> XCUIElement? {
+        for label in labels {
+            let button = photos.toolbars.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+            if button.exists && button.isHittable { return button }
+        }
+        note("NOT FOUND toolbar button \(labels)")
+        return nil
     }
 
     func stepDaysMonthsYears() {
@@ -262,14 +315,27 @@ final class PhotosTour: XCTestCase {
         guard field.waitForExistence(timeout: 3) else { note("NOT FOUND search field"); return }
         field.tap()
         capture("61-search-focused")
-        field.typeText("Oxford")
-        pause(2)
-        capture("62-search-typed")
-        // Return submits. The keyboard's "search" key is absent while a hardware keyboard is attached, and a
-        // "Search" label would match the tab bar.
-        field.typeText("\n")
-        pause(2)
-        capture("63-search-results")
+        // Run 3: "Oxford", a place in the photos' GPS, found nothing; the simulator may not index places. Try the
+        // other places, a year, a month and media types, and keep the first that finds something.
+        for term in ["Oxford", "Cardiff", "Barcelona", "2025", "October", "Screenshots", "Videos"] {
+            guard field.exists else { break }
+            field.tap()
+            let typed = (field.value as? String) ?? ""
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count + 2))
+            field.typeText(term)
+            pause(2.5)
+            capture("62-search-typed-\(term.lowercased())")
+            // Return submits. The keyboard's "search" key is absent while a hardware keyboard is attached, and a
+            // "Search" label would match the tab bar.
+            field.typeText("\n")
+            pause(3)
+            let none = photos.staticTexts["No Results"].exists
+            note("search '\(term)': \(none ? "no results" : "results")")
+            if !none {
+                capture("63-search-results-\(term.lowercased())")
+                break
+            }
+        }
         tap(["Cancel"], timeout: 2)
     }
 
@@ -344,8 +410,33 @@ final class PhotosTour: XCTestCase {
                 pause(3)
             }
             capture("71-recently-deleted")
+            // Its menus: the top More, then Select mode's More with nothing ticked and with one photo ticked.
+            // Menus are only opened and dismissed; nothing is recovered or deleted.
+            let topMore = photos.navigationBars.buttons["More"]
+            if topMore.exists && topMore.isHittable {
+                topMore.tap()
+                pause(1)
+                capture("71m-recently-deleted-more-menu")
+                dismissMenu()
+            }
             if tap(["Select"]) {
                 capture("72-recently-deleted-select")
+                if let more = toolbarButton(["More"]) {
+                    more.tap()
+                    pause(1)
+                    capture("72b-select-more-menu")
+                    dismissMenu()
+                }
+                if let first = visibleCells().first {
+                    selectTap(first)
+                    capture("72c-one-selected")
+                    if let more = toolbarButton(["More"]) {
+                        more.tap()
+                        pause(1)
+                        capture("72d-one-selected-more-menu")
+                        dismissMenu()
+                    }
+                }
                 tap(["Cancel"])
             }
             goBack()
