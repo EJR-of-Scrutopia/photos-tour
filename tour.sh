@@ -67,6 +67,13 @@ xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --
   --cellularMode active --cellularBars 4 --wifiBars 3 2>/dev/null || true
 xcrun simctl ui "$UDID" appearance light
 
+# iOS 16 and later lock Hidden and Recently Deleted behind Face ID or the passcode. The simulator has no passcode,
+# so its lock can neither be opened nor switched off (run 7, 18 October 2026). Enrol the simulator's Face ID
+# instead; run_tour answers every Face ID prompt with a match while a pass runs.
+xcrun simctl spawn "$UDID" notifyutil -s com.apple.BiometricKit.enrollmentChanged '1'
+xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit.enrollmentChanged
+say "Face ID enrolment state: $(xcrun simctl spawn "$UDID" notifyutil -g com.apple.BiometricKit.enrollmentChanged 2>&1)"
+
 if [ "${SKIP_SEED:-0}" != "1" ]; then
   say "making the test photos"
   mkdir -p "$HERE/.tools"
@@ -141,6 +148,12 @@ run_tour() {  # $1 light|dark, $2 steps ("none" skips the pass)
   local log="$OUT/xcodebuild-$1-${DEVICE_TYPE}-iOS${IOS}.log"
   local stamp="$OUT/.started-$1"
   touch "$stamp"
+  # A match with no Face ID prompt showing does nothing, so the loop runs for the whole pass.
+  ( while :; do
+      xcrun simctl spawn "$UDID" notifyutil -p com.apple.BiometricKit_Sim.pearl.match >/dev/null 2>&1
+      sleep 1
+    done ) &
+  local faceid=$!
   xcodebuild_test "$1" "$2" "$log" CODE_SIGNING_ALLOWED=NO
   local status=$?
   # The tour writes tour-log.txt from its first line, so none newer than the stamp means it never started.
@@ -153,6 +166,8 @@ run_tour() {  # $1 light|dark, $2 steps ("none" skips the pass)
     status=$?
     tourlog="$(find "$OUT" -name tour-log.txt -newer "$stamp" | head -1)"
   fi
+  kill "$faceid" 2>/dev/null
+  wait "$faceid" 2>/dev/null
   say "xcodebuild exit status $status (65 is expected: XCUITest records a failure for each control it could not use)"
   grep -E "error:|\*\* TEST|Testing failed|Test session results" "$log" | head -20
   if [ -n "$tourlog" ]; then

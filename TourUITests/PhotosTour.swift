@@ -306,11 +306,23 @@ final class PhotosTour: XCTestCase {
             captureScreen("71x-after-tap-\(attempt)", of: photos)
             let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             if springboard.alerts.count > 0 { note("system alert: '\(springboard.alerts.firstMatch.label)'") }
-            let title = photos.navigationBars.firstMatch.identifier
+            // With Face ID enrolled the tap may raise the prompt straight away; give the match time to land.
+            var title = photos.navigationBars.firstMatch.identifier
+            var waited = 0
+            while !title.localizedCaseInsensitiveContains("Deleted") && waited < 6 {
+                pause(1)
+                waited += 1
+                title = photos.navigationBars.firstMatch.identifier
+            }
             note("opened '\(title)'")
             guard title.localizedCaseInsensitiveContains("Deleted") else { goBack(); continue }
             capture("71a-recently-deleted-opened")
-            if tap(["View Album"], timeout: 2) { pause(2) }
+            // tour.sh answers the Face ID prompt with a match about a second after it shows.
+            if tap(["View Album"], timeout: 2) {
+                pause(1)
+                captureScreen("71b-face-id-prompt", of: photos)
+                pause(3)
+            }
             capture("71-recently-deleted")
             if tap(["Select"]) {
                 capture("72-recently-deleted-select")
@@ -324,6 +336,8 @@ final class PhotosTour: XCTestCase {
 
     /// iOS 16 and later lock Hidden and Recently Deleted behind Face ID or the passcode (Settings > Photos). On the
     /// throwaway simulator the tour turns that lock off, as an owner can, so the album opens (run 5, 18 October 2026).
+    /// Run 7: switching it off asks for the passcode, which a simulator does not have, so the lock stays on. Kept for
+    /// its Settings screenshots; tour.sh now enrols Face ID and the deleted step opens the album through it.
     func stepUnlockSetting() {
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         settings.launch()
