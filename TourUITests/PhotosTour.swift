@@ -364,8 +364,11 @@ final class PhotosTour: XCTestCase {
         }
         captureScreen("69b-settings-photos-lock", of: settings)
         settings.terminate()
-        photos.activate()
-        pause(2)
+        // Run 6: a Photos left running keeps its padlocks, and a locked album does nothing on a simulator with no
+        // passcode or Face ID, so Photos is restarted to read the new setting.
+        photos.terminate()
+        photos.launch()
+        pause(4)
     }
 
     /// A screenshot and element tree of any app, without bringing Photos back to the front first.
