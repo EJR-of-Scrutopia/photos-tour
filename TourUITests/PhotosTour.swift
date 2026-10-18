@@ -357,8 +357,10 @@ final class PhotosTour: XCTestCase {
         settings.staticTexts["Photos"].tap()
         pause(1.5)
         captureScreen("69-settings-photos", of: settings)
-        let lock = settings.switches.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@",
-                                                          "Face ID", "Passcode")).firstMatch
+        // "Use Face ID" (Face ID enrolled), "Use Touch ID" or "Use Passcode". Apple writes "Face ID" with a
+        // no-break space, which a plain "Face ID" never matches (run 9), so match the first word only.
+        let lock = settings.switches.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@",
+                                                          "Face", "Touch", "Passcode")).firstMatch
         tries = 0
         while !(lock.exists && lock.isHittable) && tries < 6 {
             settings.swipeUp()

@@ -149,8 +149,21 @@ print(next((r.get("runtimeRoot", "") for r in json.load(sys.stdin)["runtimes"] i
     "$ROOT"/System/Library/Frameworks/Photos* "$ROOT"/System/Library/PreferenceBundles \
     "$ROOT"/Applications/MobileSlideShow.app "$ROOT"/Applications/Preferences.app 2>/dev/null | sort | uniq -c | sort -rn | head -80
 } > "$OUT/lock-probe.txt"
+# Run 9 found the name, ContentPrivacyEnabled, but not its preferences domain: the strings stored beside it in
+# the binary that holds it usually include the domain.
+grep -r -l -a "ContentPrivacyEnabled" "$ROOT"/System/Library/PrivateFrameworks/*Photo* \
+  "$ROOT"/System/Library/Frameworks/Photos* "$ROOT"/System/Library/PreferenceBundles \
+  "$ROOT"/Applications/MobileSlideShow.app "$ROOT"/Applications/Preferences.app 2>/dev/null | while read -r f; do
+  echo "-- $f"
+  strings -a "$f" | grep -n -B12 -A12 -E "^_?ContentPrivacyEnabled$" | head -60
+done >> "$OUT/lock-probe.txt"
 say "lock probe: $(wc -l < "$OUT/lock-probe.txt" | tr -d ' ') lines"
 probe_defaults before
+# Even with Face ID enrolled, a tap on a locked album does nothing on the simulator (runs 8 and 9), so the lock is
+# set off in the domains it most likely lives in. Settings > Photos then shows the switch off if one was right.
+for domain in com.apple.mobileslideshow com.apple.Photos com.apple.photos.shareddefaults; do
+  xcrun simctl spawn "$UDID" defaults write "$domain" ContentPrivacyEnabled -bool NO
+done
 
 xcodebuild_test() {  # $1 light|dark, $2 steps, $3 log file, then extra build settings
   local appearance="$1" steps="$2" log="$3"
