@@ -295,7 +295,11 @@ final class PhotosTour: XCTestCase {
             scrollDown(3 + attempt)
             pause(1.5)
             if attempt == 1 { capture("70b-albums-utilities") }
-            guard tap(["Recently Deleted"]) else { continue }
+            // Tap the row's own text: its cell spans all four Utilities rows and its centre is the Hidden row.
+            let row = photos.staticTexts.matching(NSPredicate(format: "label == %@", "Recently Deleted")).firstMatch
+            guard row.exists else { continue }
+            note("tapping the Recently Deleted text at y \(Int(row.frame.midY))")
+            row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             pause(1.5)
             let title = photos.navigationBars.firstMatch.identifier
             note("opened '\(title)'")
@@ -372,9 +376,11 @@ final class PhotosTour: XCTestCase {
                     continue
                 }
                 let exact = NSPredicate(format: "label == %@ OR identifier == %@", label, label)
-                // Switches too: the viewer's Favourite heart is a switch (run 2, 18 October 2026).
+                // Switches too: the viewer's Favourite heart is a switch (run 2, 18 October 2026). Texts before cells:
+                // the Albums lists group several rows in one cell named after its last row, so tapping the cell
+                // "Recently Deleted" hit Hidden, and "Screenshots" opened Videos (runs 3 and 4).
                 let queries = [photos.tabBars.buttons, photos.buttons, photos.switches, photos.segmentedControls.buttons,
-                               photos.menuItems, photos.cells, photos.staticTexts, photos.otherElements]
+                               photos.menuItems, photos.staticTexts, photos.cells, photos.otherElements]
                 for query in queries {
                     if let element = firstHittable(query.matching(exact)) {
                         element.tap()
