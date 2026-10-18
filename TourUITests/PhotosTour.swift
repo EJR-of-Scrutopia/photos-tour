@@ -134,10 +134,23 @@ final class PhotosTour: XCTestCase {
         guard tap(["Select"]) else { return }
         pause(1.5)
         capture("09-select-mode")
-        let cells = visibleCells()
-        guard cells.count >= 9 else { note("NOT FOUND enough photos to select (\(cells.count))"); return }
-        let start = cells.count / 3
-        for cell in cells[start..<(start + 3)] { selectTap(cell) }
+        // Run 13: three coordinate taps, each re-tapped when the title had not changed, left nothing ticked (the
+        // title may lag, so a re-tap untick). Tap the photo cells themselves, clear of the bars, and re-tap only a
+        // cell that does not report itself selected.
+        let cells = photos.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo,")).allElementsBoundByIndex
+            .filter { $0.exists && $0.isHittable && $0.frame.minY > 110 && $0.frame.maxY < 760 }
+        guard cells.count >= 3 else { note("NOT FOUND three whole photos to select (\(cells.count))"); return }
+        for (n, cell) in cells.prefix(3).enumerated() {
+            cell.tap()
+            pause(1)
+            if !cell.isSelected {
+                note("tick \(n + 1) not taken; tapping again")
+                cell.tap()
+                pause(1)
+            }
+            note("tick \(n + 1): selected \(cell.isSelected), title '\(selectTitle())'")
+            if n == 0 { capture("10a-select-one") }
+        }
         capture("10-select-three")
         if let more = toolbarButton(["More"]) {
             more.tap()
