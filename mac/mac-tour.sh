@@ -240,6 +240,16 @@ set_appearance() {  # $1 light|dark: the global default Photos reads at launch (
     defaults delete -g AppleInterfaceStyle 2>/dev/null
   fi
   defaults write -g AppleInterfaceStyleSwitchesAutomatically -bool false
+  # Mac run 2: the default alone left Photos light. Post the change as System Settings does, and also ask System
+  # Events (an Automation prompt cannot hang it: run_to stops it after 15 s).
+  if [ -x "$HERE/.tools/theme-notify" ] || xcrun swiftc -swift-version 5 -O -o "$HERE/.tools/theme-notify" "$HERE/theme-notify.swift"; then
+    "$HERE/.tools/theme-notify" && say "posted AppleInterfaceThemeChangedNotification"
+  fi
+  local dark=false
+  [ "$1" = "dark" ] && dark=true
+  run_to 15 osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $dark" \
+    > "$OUT/appearance-osascript-$1.txt" 2>&1
+  say "System Events dark mode $dark: exit $? ($(head -c 120 "$OUT/appearance-osascript-$1.txt"))"
   say "appearance $1: AppleInterfaceStyle is '$(defaults read -g AppleInterfaceStyle 2>/dev/null || echo unset)' (unset means light)"
 }
 
