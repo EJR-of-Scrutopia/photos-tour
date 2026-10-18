@@ -294,18 +294,17 @@ final class PhotosTour: XCTestCase {
         scrollDown(5)
         pause(1.5)
         capture("70b-albums-utilities")
-        // Run 10: with the lock set off (no padlocks) a tap on the Recently Deleted text still did nothing. Tap its
-        // neighbours first as a control, then try each way of tapping it, and record which one opens it.
+        // Run 10: with the lock set off (no padlocks) a tap on the Recently Deleted text still did nothing. Run 11: the
+        // first tap after scrolling (Imports) did nothing and the next (Hidden) opened its album, so the neighbours
+        // are tapped first, which also spends that first tap, then each way of tapping Recently Deleted in turn.
         for name in ["Imports", "Hidden"] {
             guard utilityText(name).exists else { note("NOT FOUND the \(name) row"); continue }
-            let before = navTitle()
             utilityText(name).tap()
             pause(2)
-            let title = navTitle()
-            note("tap on \(name): '\(before)' -> '\(title)'")
+            note("tap on \(name): \(albumOpen(name) ? "opened" : "stayed on Albums")")
             captureScreen("71c-tap-\(name.lowercased())", of: photos)
-            // Only after a real push: on Albums itself the first navigation-bar button is "+".
-            if title != before { goBack(); pause(1.5) }
+            // Only inside an album: on Albums itself the first navigation-bar button is "+".
+            if inAnAlbum() { goBack(); pause(1.5) }
         }
         // The long press goes last: the menu it may raise would need dismissing, and a tap near the top of the
         // screen scrolls the list back to the top.
@@ -326,15 +325,17 @@ final class PhotosTour: XCTestCase {
             way.1()
             pause(1.5)
             captureScreen("71x-after-\(n + 1)-\(way.0.replacingOccurrences(of: " ", with: "-"))", of: photos)
-            var title = navTitle()
             var waited = 0
-            while !title.localizedCaseInsensitiveContains("Deleted") && waited < 4 {
+            while !albumOpen("Recently Deleted") && waited < 4 {
                 pause(1)
                 waited += 1
-                title = navTitle()
             }
-            note("\(way.0) on Recently Deleted: '\(title)'")
-            guard title.localizedCaseInsensitiveContains("Deleted") else { continue }
+            let opened = albumOpen("Recently Deleted")
+            note("\(way.0) on Recently Deleted: \(opened ? "opened" : inAnAlbum() ? "opened another album" : "stayed on Albums")")
+            guard opened else {
+                if inAnAlbum() { goBack(); pause(1.5) }
+                continue
+            }
             capture("71a-recently-deleted-opened")
             // tour.sh answers a Face ID prompt with a match about a second after it shows.
             if tap(["View Album"], timeout: 2) {
@@ -353,7 +354,13 @@ final class PhotosTour: XCTestCase {
         note("NOT FOUND Recently Deleted: no way of tapping opened it")
     }
 
-    func navTitle() -> String { photos.navigationBars.firstMatch.identifier }
+    /// Inside an album the navigation bar keeps the identifier "Albums" (run 11, 18 October 2026), so an open album
+    /// shows instead as an "Albums" back button and a full-screen container labelled with the album's name.
+    func inAnAlbum() -> Bool { photos.navigationBars.buttons["Albums"].exists }
+
+    func albumOpen(_ name: String) -> Bool {
+        inAnAlbum() && photos.otherElements.matching(NSPredicate(format: "label == %@", name)).firstMatch.exists
+    }
 
     /// A Utilities row's own text. One cell spans all four rows and is named after the last, so its centre is the
     /// Hidden row (runs 3 and 4).
