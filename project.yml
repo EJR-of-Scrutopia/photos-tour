@@ -5,6 +5,10 @@ options:
   bundleIdPrefix: local.photostour
   deploymentTarget:
     iOS: "16.0"
+  # Xcode 15.4 (the iOS 17 simulators) cannot open XcodeGen 2.46's default xcode16_0 format ("future Xcode
+  # project file format (77)", first run, 18 October 2026).
+  projectFormat: xcode15_3
+  xcodeVersion: "15.4"
 settings:
   base:
     SWIFT_VERSION: "5.0"
