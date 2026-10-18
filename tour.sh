@@ -189,6 +189,10 @@ run_tour() {  # $1 light|dark, $2 steps ("none" skips the pass)
       sleep 1
     done ) &
   local faceid=$!
+  # Photos' own log, for whatever it says when a tap on Recently Deleted does nothing (run 10).
+  xcrun simctl spawn "$UDID" log stream --style compact --predicate 'process == "MobileSlideShow"' \
+    > "$OUT/photos-log-$1.txt" 2>&1 &
+  local photoslog=$!
   xcodebuild_test "$1" "$2" "$log" CODE_SIGNING_ALLOWED=NO
   local status=$?
   # The tour writes tour-log.txt from its first line, so none newer than the stamp means it never started.
@@ -201,8 +205,8 @@ run_tour() {  # $1 light|dark, $2 steps ("none" skips the pass)
     status=$?
     tourlog="$(find "$OUT" -name tour-log.txt -newer "$stamp" | head -1)"
   fi
-  kill "$faceid" 2>/dev/null
-  wait "$faceid" 2>/dev/null
+  kill "$faceid" "$photoslog" 2>/dev/null
+  wait "$faceid" "$photoslog" 2>/dev/null
   say "xcodebuild exit status $status (65 is expected: XCUITest records a failure for each control it could not use)"
   grep -E "error:|\*\* TEST|Testing failed|Test session results" "$log" | head -20
   if [ -n "$tourlog" ]; then

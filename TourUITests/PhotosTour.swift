@@ -290,34 +290,53 @@ final class PhotosTour: XCTestCase {
 
     func stepRecentlyDeleted() {
         guard tap(["Albums"]) else { return }
-        // Run 3 (18 October 2026): quick swipes left the list still moving, and the tap landed on Duplicates, the
-        // row above. Scroll with slow drags, let the list settle, and check the title before capturing.
-        for attempt in 1...3 {
-            scrollDown(3 + attempt)
+        // Run 3 (18 October 2026): quick swipes left the list still moving; slow drags, then let it settle.
+        scrollDown(5)
+        pause(1.5)
+        capture("70b-albums-utilities")
+        // Run 10: with the lock set off (no padlocks) a tap on the Recently Deleted text still did nothing. Tap its
+        // neighbours first as a control, then try each way of tapping it, and record which one opens it.
+        for name in ["Imports", "Hidden"] {
+            guard utilityText(name).exists else { note("NOT FOUND the \(name) row"); continue }
+            let before = navTitle()
+            utilityText(name).tap()
+            pause(2)
+            let title = navTitle()
+            note("tap on \(name): '\(before)' -> '\(title)'")
+            captureScreen("71c-tap-\(name.lowercased())", of: photos)
+            // Only after a real push: on Albums itself the first navigation-bar button is "+".
+            if title != before { goBack(); pause(1.5) }
+        }
+        // The long press goes last: the menu it may raise would need dismissing, and a tap near the top of the
+        // screen scrolls the list back to the top.
+        let ways: [(String, () -> Void)] = [
+            ("element tap", { self.utilityText("Recently Deleted").tap() }),
+            ("row cell tap", { _ = self.utilityCell("Recently Deleted")?.tap() }),
+            ("coordinate tap", {
+                self.utilityText("Recently Deleted").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }),
+            ("long press", { self.utilityText("Recently Deleted").press(forDuration: 0.8) }),
+        ]
+        for (n, way) in ways.enumerated() {
+            if !(utilityText("Recently Deleted").exists && utilityText("Recently Deleted").isHittable) {
+                scrollDown(5)
+                pause(1.5)
+            }
+            guard utilityText("Recently Deleted").exists else { note("NOT FOUND the Recently Deleted row"); break }
+            way.1()
             pause(1.5)
-            if attempt == 1 { capture("70b-albums-utilities") }
-            // Tap the row's own text: its cell spans all four Utilities rows and its centre is the Hidden row.
-            let row = photos.staticTexts.matching(NSPredicate(format: "label == %@", "Recently Deleted")).firstMatch
-            guard row.exists else { continue }
-            note("tapping the Recently Deleted text at y \(Int(row.frame.midY))")
-            row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            pause(1.5)
-            // Run 5: the right row was tapped and Photos stayed on Albums; a system unlock prompt is the suspect.
-            captureScreen("71x-after-tap-\(attempt)", of: photos)
-            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-            if springboard.alerts.count > 0 { note("system alert: '\(springboard.alerts.firstMatch.label)'") }
-            // With Face ID enrolled the tap may raise the prompt straight away; give the match time to land.
-            var title = photos.navigationBars.firstMatch.identifier
+            captureScreen("71x-after-\(n + 1)-\(way.0.replacingOccurrences(of: " ", with: "-"))", of: photos)
+            var title = navTitle()
             var waited = 0
-            while !title.localizedCaseInsensitiveContains("Deleted") && waited < 6 {
+            while !title.localizedCaseInsensitiveContains("Deleted") && waited < 4 {
                 pause(1)
                 waited += 1
-                title = photos.navigationBars.firstMatch.identifier
+                title = navTitle()
             }
-            note("opened '\(title)'")
-            guard title.localizedCaseInsensitiveContains("Deleted") else { goBack(); continue }
+            note("\(way.0) on Recently Deleted: '\(title)'")
+            guard title.localizedCaseInsensitiveContains("Deleted") else { continue }
             capture("71a-recently-deleted-opened")
-            // tour.sh answers the Face ID prompt with a match about a second after it shows.
+            // tour.sh answers a Face ID prompt with a match about a second after it shows.
             if tap(["View Album"], timeout: 2) {
                 pause(1)
                 captureScreen("71b-face-id-prompt", of: photos)
@@ -331,7 +350,21 @@ final class PhotosTour: XCTestCase {
             goBack()
             return
         }
-        note("NOT FOUND Recently Deleted after three attempts")
+        note("NOT FOUND Recently Deleted: no way of tapping opened it")
+    }
+
+    func navTitle() -> String { photos.navigationBars.firstMatch.identifier }
+
+    /// A Utilities row's own text. One cell spans all four rows and is named after the last, so its centre is the
+    /// Hidden row (runs 3 and 4).
+    func utilityText(_ name: String) -> XCUIElement {
+        photos.staticTexts.matching(NSPredicate(format: "label == %@", name)).firstMatch
+    }
+
+    /// The row's own cell inside that spanning cell: the short one holding the row's text.
+    func utilityCell(_ name: String) -> XCUIElement? {
+        photos.cells.containing(NSPredicate(format: "label == %@", name)).allElementsBoundByIndex
+            .first { $0.exists && $0.frame.height < 80 }
     }
 
     /// iOS 16 and later lock Hidden and Recently Deleted behind Face ID or the passcode (Settings > Photos). On the
