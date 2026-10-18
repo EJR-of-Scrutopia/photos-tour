@@ -73,7 +73,7 @@ final class MacPhotosTour: XCTestCase {
 
     // MARK: the tour
 
-    func testRun() {
+    func testTour() {  // not testRun: XCTest already has a testRun property (Mac run 1, 19 October 2026)
         note("mode \(mode), appearance \(appearance), \(ProcessInfo.processInfo.operatingSystemVersionString)")
         if mode == "import" || mode == "wait" {
             runImport(waitOnly: mode == "wait")
