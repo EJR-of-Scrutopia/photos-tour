@@ -1,0 +1,50 @@
+name: Photos tour
+
+# Walks Apple's Photos app on an iOS 17 simulator and uploads screenshots plus every element's frame in points.
+# The macOS 14 runner image carries Xcode 15.4 and the iOS 17.0 to 17.5 simulators (supported until 2 November 2026).
+on:
+  workflow_dispatch:
+    inputs:
+      steps_light:
+        description: "Steps in light mode: all, or a comma list (library,views,viewer,context,foryou,albums,search,delete,deleted)"
+        default: "all"
+      steps_dark:
+        description: "Steps in dark mode, or none"
+        default: "library,views,viewer,foryou,albums,search"
+      device:
+        description: "Simulator device type"
+        default: "iPhone-15-Pro"
+      xcode:
+        description: "Xcode version on the runner"
+        default: "15.4"
+
+jobs:
+  tour:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${{ inputs.xcode }}.app"
+          xcodebuild -version
+          xcrun simctl list runtimes | grep iOS
+
+      - name: Run the tour
+        env:
+          STEPS_LIGHT: ${{ inputs.steps_light }}
+          STEPS_DARK: ${{ inputs.steps_dark }}
+          DEVICE_TYPE: ${{ inputs.device }}
+        run: |
+          chmod +x tour.sh
+          ./tour.sh
+
+      - name: Upload screenshots, element frames and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photos-tour-out
+          path: ~/photos-tour-out
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,4 @@
+.tools/
+seed/
+*.xcresult
+PhotosTour.xcodeproj/
