@@ -225,15 +225,15 @@ final class PhotosTour: XCTestCase {
         guard tap(["Albums"]) else { return }
         capture("40-albums-top")
         for n in 1...4 {
-            photos.swipeUp()
+            scrollDown(1)
             capture("4\(n)-albums-scroll-\(n)")
         }
-        for _ in 0..<6 { photos.swipeDown() }
+        scrollUp(6)
         if tap(["See All"]) { capture("45-albums-see-all"); goBack() }
         if tap(["Recents"]) { capture("46-album-recents"); goBack() }
         if tap(["Favorites", "Favourites"]) { capture("47-album-favorites"); goBack() }
         if tap(["People & Pets", "People"]) { capture("48-people-and-pets"); goBack() }
-        for _ in 0..<2 { photos.swipeUp() }
+        scrollDown(2)
         if tap(["Videos"]) {
             capture("49-media-type-videos")
             if openSomePhoto() {
@@ -246,7 +246,7 @@ final class PhotosTour: XCTestCase {
             goBack()
         }
         if tap(["Screenshots"]) { capture("52-media-type-screenshots"); goBack() }
-        for _ in 0..<6 { photos.swipeDown() }
+        scrollUp(6)
         if tap(["+", "Add", "New Album"]) {
             capture("53-albums-add-menu")
             dismissMenu()
@@ -276,26 +276,58 @@ final class PhotosTour: XCTestCase {
         tap(["Library", "All Photos"])
         tap(["All Photos"])
         guard openSomePhoto() else { return }
-        if tap(["Delete", "Trash"]) {
-            capture("70-delete-confirm")
-            tap(["Delete Photo", "Delete"])
+        // Three photos, so Recently Deleted shows a grid with its days-remaining labels, not a lone item.
+        for n in 1...3 {
+            if tap(["Delete", "Trash"]) {
+                if n == 1 { capture("70-delete-confirm") }
+                tap(["Delete Photo", "Delete"])
+                pause(1.5)
+            }
         }
         closeViewer()
     }
 
     func stepRecentlyDeleted() {
         guard tap(["Albums"]) else { return }
-        for _ in 0..<6 { photos.swipeUp() }
-        if tap(["Recently Deleted"]) {
-            tap(["View Album"], timeout: 2)
-            pause(2)
+        // Run 3 (18 October 2026): quick swipes left the list still moving, and the tap landed on Duplicates, the
+        // row above. Scroll with slow drags, let the list settle, and check the title before capturing.
+        for attempt in 1...3 {
+            scrollDown(3 + attempt)
+            pause(1.5)
+            if attempt == 1 { capture("70b-albums-utilities") }
+            guard tap(["Recently Deleted"]) else { continue }
+            pause(1.5)
+            let title = photos.navigationBars.firstMatch.identifier
+            note("opened '\(title)'")
+            guard title.localizedCaseInsensitiveContains("Deleted") else { goBack(); continue }
+            capture("71a-recently-deleted-opened")
+            if tap(["View Album"], timeout: 2) { pause(2) }
             capture("71-recently-deleted")
             if tap(["Select"]) {
                 capture("72-recently-deleted-select")
                 tap(["Cancel"])
             }
             goBack()
+            return
         }
+        note("NOT FOUND Recently Deleted after three attempts")
+    }
+
+    /// Slow drags rather than swipes: a swipe left the Albums list moving (or not moving at all) in run 3.
+    func scrollDown(_ times: Int) {
+        for _ in 0..<times { drag(from: 0.78, to: 0.30) }
+    }
+
+    func scrollUp(_ times: Int) {
+        for _ in 0..<times { drag(from: 0.30, to: 0.78) }
+    }
+
+    func drag(from startY: Double, to endY: Double) {
+        ensureRunning()
+        let start = photos.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: startY))
+        let end = photos.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: endY))
+        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+        pause(0.6)
     }
 
     // MARK: helpers
